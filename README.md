@@ -141,7 +141,7 @@ See the [options reference](#options-reference) below.
 
 ## 5. Build and install the patched game
 
-Generation produces a patch file for your slot. **Open it** (double-click, or
+Generation produces a patch file for your slot. **Open it** (drag onto the launcher, or
 Launcher → *Open Patch*). 
 
 The first time you do this it will automatically open the client, but on subsequent plays you will have to open it yourself.
