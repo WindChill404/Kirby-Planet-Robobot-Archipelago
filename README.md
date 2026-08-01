@@ -1,4 +1,4 @@
-# Kirby: Planet Robobot — Archipelago
+# Kirby: Planet Robobot Archipelago
 
 An Archipelago randomizer for **Kirby: Planet Robobot** (Nintendo 3DS).
 
