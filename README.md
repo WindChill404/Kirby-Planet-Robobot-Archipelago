@@ -248,6 +248,7 @@ automatically, but you must actually finish the stage.
 - **Robobot Armor cannot re-absorb a dropped ability star.** If the armor's mode
   is knocked out, the star it leaves behind cannot be scanned back up. Under
   investigation.
+- **DeathLink currently doesn't work.**
 
 ---
 
