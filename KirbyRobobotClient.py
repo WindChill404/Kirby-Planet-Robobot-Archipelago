@@ -140,6 +140,8 @@ class KirbyRobobotContext(CommonContext):
         self.death_link_on = False
         self.ability_gate_on = False
         self.armor_gate_on = False
+        self.rare_stickers_on = True                # yaml: rare_sticker_checks
+        self.normal_stickers_on = False             # yaml: sticker_checks
         self.open_all_stages = True   # default on; slot_data confirms
         self.death_owed = False
         self.was_dead = False
@@ -174,6 +176,13 @@ class KirbyRobobotContext(CommonContext):
             if self.slot_data.get("armor_gating"):
                 self.armor_gate_on = True
                 logger.info("Armor mode gating is on.")
+            # Sticker handling only touches the album for the kinds the yaml
+            # actually turned into locations. With a kind switched off there's
+            # nothing to check, so its stickers are left completely alone.
+            self.rare_stickers_on = bool(
+                self.slot_data.get("rare_sticker_checks", True))
+            self.normal_stickers_on = bool(
+                self.slot_data.get("sticker_checks", False))
             if self.slot_data.get("death_link"):
                 self.death_link_on = True
                 Utils.async_start(self.update_death_link(True))
@@ -320,9 +329,7 @@ async def _read_in_stage(ctx: KirbyRobobotContext) -> bool:
         except Exception:
             beat = 0
         if beat:
-            if not ctx._heartbeat_seen:
-                ctx._heartbeat_seen = True
-                logger.info("In-stage detection is using the ROM heartbeat.")
+            ctx._heartbeat_seen = True
             try:
                 await ctx.iface.write(addr, struct.pack("<I", 0))
             except Exception:
@@ -978,13 +985,35 @@ async def grant_pending_stickers(ctx: KirbyRobobotContext, state):
         ctx._sticker_map_streak += 1
     idle = ctx._sticker_map_streak
 
+    # Only stickers of a kind the yaml turned into locations are managed here.
+    # With a kind switched off it has no checks to earn, so there is no reason
+    # to clear it out of the album: a sticker sent as plain filler should just
+    # be yours to use, exactly as if you had found it.
     idx_to_loc = {}
+    managed = set()
     for _n, d in _LOC_BY_ID.values():
-        if d.category in ("rare", "sticker") and d.sticker_index is not None:
+        if d.sticker_index is None:
+            continue
+        if d.category == "rare" and ctx.rare_stickers_on:
             idx_to_loc[d.sticker_index] = d.code_offset
+            managed.add(d.sticker_index)
+        elif d.category == "sticker" and ctx.normal_stickers_on:
+            idx_to_loc[d.sticker_index] = d.code_offset
+            managed.add(d.sticker_index)
+
+    # Stickers of a switched-off kind are simply put in the album and left
+    # there, since nothing needs to be earned for them.
+    for idx in sorted(ctx.stickers_granted - managed):
+        if idx * 2 + 1 >= len(arr):
+            continue
+        if arr[idx*2:idx*2+2] != b"\x01\x01":
+            try:
+                await ctx.iface.write(slot + off.STICKER_ARRAY + idx * 2, b"\x01\x01")
+            except Exception:
+                pass
 
     newly_found = []
-    for idx in sorted(ctx.stickers_granted):
+    for idx in sorted(ctx.stickers_granted & managed):
         if idx * 2 + 1 >= len(arr):
             continue
         loc = idx_to_loc.get(idx)
@@ -1039,7 +1068,6 @@ async def apply_item(ctx: KirbyRobobotContext, item_id: int):
         EX gates read the game's own cube count. Written cubes are tracked so they
         never echo back as checks.
       * Copy abilities / armor -> permissions, enforced live (see the gate below).
-      * Ability Testing Room -> a real save flag.
     Nothing here ever writes a flag we then report as one of the player's checks."""
     entry = _ITEM_BY_ID.get(item_id)
     if not entry:
@@ -1108,12 +1136,6 @@ async def apply_item(ctx: KirbyRobobotContext, item_id: int):
         return
     slot = M.SAVE_SLOTS[M.ACTIVE_SLOT]
     off = M.SlotOffsets
-    if name == C.ABILITY_TESTING_ROOM and off.ABILITY_ROOM_OPEN is not None:
-        try:
-            await ctx.iface.write_u8(slot + off.ABILITY_ROOM_OPEN, 1)
-        except Exception:
-            pass
-        return
 
 
 

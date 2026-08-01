@@ -23,10 +23,6 @@ def set_rules(world):
         except KeyError:
             pass
 
-    # Ability Testing Room: needs the item that opens it.
-    loc_rule("Ability Testing Room Opened",
-             lambda state: state.has(C.ABILITY_TESTING_ROOM, player))
-
     # Star Dream needs the armor and Level 6 access (the per-level boss gates,
     # including Level 6's, are set in the loop below).
     loc_rule("Defeat Star Dream (Story)",
@@ -123,6 +119,19 @@ def set_rules(world):
             try:
                 forbid_item(multiworld.get_location(loc_name, player),
                             need, player)
+            except KeyError:
+                pass
+
+    # An Area's boss is opened by that Area's own Code Cubes, so putting one of
+    # those cubes behind that same boss makes the boss partly guard its own key.
+    # Logic no longer allows that to deadlock, but it still reads badly in play,
+    # so the Area's cubes are kept off its boss and EX clears entirely.
+    for lv in C.LEVELS:
+        cube = C.area_cube_name(lv)
+        for suffix in ("Boss Clear", "EX Clear"):
+            nm = f"{C.area_name(lv)} {suffix}"
+            try:
+                forbid_item(multiworld.get_location(nm, player), cube, player)
             except KeyError:
                 pass
 

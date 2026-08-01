@@ -49,12 +49,12 @@ for ab in C.COPY_ABILITIES:
 for m in C.ARMOR_MODES:
     _PROGRESSION.append(f"Armor Mode: {m}")
 
-# Ability Testing Room. The sub-game access items (3D Rumble, Team Kirby Clash,
-# Meta Knightmare, both Arenas) used to live here, but none of them did anything:
-# we never found the save offsets that record that progress, so receiving one had
-# no effect in game and its location could not be checked. They're out until
-# those offsets are known, rather than sitting in the pool as dead items.
-_PROGRESSION.append(C.ABILITY_TESTING_ROOM)
+# The sub-game access items (3D Rumble, Team Kirby Clash, Meta Knightmare, both
+# Arenas) used to live here, and so did an Ability Testing Room Key. None of them
+# did anything: we never found the save offsets that record that progress, so
+# receiving one had no effect in game and its location could not be checked.
+# They're out until those offsets are known, rather than sitting in the pool as
+# dead items taking up space that real checks could use.
 
 # 100 Code Cubes are progression (they unlock EX stages via count thresholds)
 CODE_CUBE = C.CODE_CUBE

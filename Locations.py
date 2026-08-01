@@ -8,7 +8,6 @@ Locations fall into these groups:
   * All-Cubes reward (1)               always on
   * Story boss / stage clears          always on
   * EX-stage unlocks (per level)       always on
-  * Ability Testing Room               always on
   * Kirby 3D Rumble (3)                optional
   * Team Kirby Clash (6)               optional
   * Meta Knightmare Returns (6)        optional
@@ -168,10 +167,6 @@ def build_location_table() -> Dict[str, LocData]:
         table[name] = LocData(
             name, "Menu", "sticker",
             sticker_index=entry["index"])
-
-    # --- Ability Testing Room open ---
-    table["Ability Testing Room Opened"] = LocData(
-        "Ability Testing Room Opened", "Menu", "event")
 
     # --- Per-stage clears (every stage, including boss and EX) ---------------
     # Detected from the save's stage array: byte 7 of each stage's 8-byte row.

@@ -48,11 +48,11 @@ except Exception:
 
 if _ICON:
     components.append(Component(
-        "Kirby Robobot Client", func=_launch_client, component_type=Type.CLIENT,
+        "Kirby Planet Robobot Client", func=_launch_client, component_type=Type.CLIENT,
         file_identifier=SuffixIdentifier(".apkr"), icon=_ICON))
 else:
     components.append(Component(
-        "Kirby Robobot Client", func=_launch_client, component_type=Type.CLIENT,
+        "Kirby Planet Robobot Client", func=_launch_client, component_type=Type.CLIENT,
         file_identifier=SuffixIdentifier(".apkr")))
 
 
@@ -147,6 +147,8 @@ class KirbyRobobotWorld(World):
             "open_all_stages": bool(self.options.open_all_stages.value),
             "ability_gating": bool(self.options.ability_gating.value),
             "armor_gating": bool(self.options.armor_gating.value),
+            "rare_sticker_checks": bool(self.options.rare_sticker_checks.value),
+            "sticker_checks": bool(self.options.sticker_checks.value),
             "kirby_color": self.options.kirby_color.current_key,
         }
 

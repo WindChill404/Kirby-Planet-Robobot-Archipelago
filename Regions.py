@@ -110,8 +110,13 @@ def connect_regions(world, regions: Dict[str, Region]):
 
         for stage in normal:
             connect(lv, f"{lv} {stage}")
-        # Boss stage requires clearing the level's normal stages (logic proxy: level access)
-        connect(lv, f"{lv} {boss}")
+        # The boss sits behind this Area's Code Cube firewall, exactly as in
+        # game. Without this rule logic believed the boss was reachable the
+        # moment you entered the Area, so fill was free to put one of the very
+        # cubes that opens the firewall behind the boss that the firewall
+        # guards, which locks the seed outright.
+        connect(lv, f"{lv} {boss}",
+                rule=lambda state, lv=lv: _has_boss_cube_gate(state, player, lv))
 
         # EX stages are unlocked by Code Cubes, exactly as in vanilla there is
         # no separate key item. (An older revision had an "EX Key"; it was

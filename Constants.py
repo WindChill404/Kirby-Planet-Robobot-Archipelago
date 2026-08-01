@@ -30,7 +30,6 @@ ABILITY_NONE_VALUE = 0
 
 # --- Robobot Armor + its 14 modes ---
 # The base armor is one item; each mode gates a scanned ability.
-ABILITY_TESTING_ROOM = "Ability Testing Room Key"
 
 ARMOR_BASE = "Robobot Armor"
 ARMOR_MODES = [
