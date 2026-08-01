@@ -293,8 +293,14 @@ STAGE_ARMOR_REQUIREMENT = {
 # the gameranx cube guide plus WiKirby/Neoseeker/Fandom stage pages. Cubes that
 # accept more than one ability (for example a rope that Cutter or Ninja can cut)
 # are deliberately left out so fill isn't over-constrained.
+# Some spots need a copy ability but don't care which one. Kept distinct from a
+# named requirement so logic asks for "hold any ability" rather than inventing a
+# specific one the puzzle never wanted.
+ANY_ABILITY = "*any*"
+
 CUBE_ABILITY_REQUIREMENT = {
     ("Level1", "Stage2", 3): "Sword",
+    ("Level1", "Stage3", 2): ANY_ABILITY,
     ("Level2", "Stage1", 3): "ESP",
     ("Level3", "Stage4", 2): "Ice",
     ("Level3", "Stage5", 2): "Hammer",
@@ -312,10 +318,54 @@ def armor_item_for_cube(level: str, stage: str, slot: int):
     return f"Armor Mode: {mode}" if mode else None
 
 
+# Rare Stickers that need a specific Kirby copy ability to reach. Sourced from
+# the GameFAQs rare sticker list cross-read with the gameranx guide.
+#
+# 1-3 is the one that matters most: its sticker sits past a metal door that only
+# ESP opens, in the same bonus room as that stage's second Code Cube. Without
+# this the seed can hand you the sticker's location with no way to reach it.
+RARE_STICKER_ABILITY_REQUIREMENT = {
+    ("Level1", "Stage3"): ANY_ABILITY,  # needs an ability, any one will do
+    ("Level2", "Stage1"): "ESP",        # ESP specifically
+    ("Level3", "Stage5"): "Hammer",   # whack the stumps by the Bonkers fight
+    ("Level4", "Stage3"): "Mirror",   # reflect Gabon's shot into the switch
+}
+
+# Rare Stickers that need a specific Robobot Armor mode.
+RARE_STICKER_ARMOR_REQUIREMENT = {
+    ("Level1", "Stage6"): "Bomb",     # 1-6 EX, hit the gate switch
+    ("Level2", "Stage2"): "Jet",      # charge attack fires a missile backwards
+    ("Level5", "Stage4"): "Wheel",    # flip between background and foreground
+    ("Level5", "Stage5"): "Stone",    # shove the trucks in the background
+}
+
+
+def ability_item_for_rare_sticker(level: str, stage: str):
+    """What a stage's Rare Sticker needs: an ability item name, the ANY_ABILITY
+    sentinel, or None."""
+    ab = RARE_STICKER_ABILITY_REQUIREMENT.get((level, stage))
+    if not ab:
+        return None
+    return ANY_ABILITY if ab == ANY_ABILITY else f"Ability: {ab}"
+
+
+def armor_item_for_rare_sticker(level: str, stage: str):
+    """The Armor Mode item a stage's Rare Sticker needs, or None."""
+    mode = RARE_STICKER_ARMOR_REQUIREMENT.get((level, stage))
+    return f"Armor Mode: {mode}" if mode else None
+
+
 def ability_item_for_cube(level: str, stage: str, slot: int):
-    """The copy-ability item a particular Code Cube needs, or None."""
+    """What a Code Cube needs: an ability item name, the ANY_ABILITY sentinel,
+    or None."""
     ab = CUBE_ABILITY_REQUIREMENT.get((level, stage, slot))
-    return f"Ability: {ab}" if ab else None
+    if not ab:
+        return None
+    return ANY_ABILITY if ab == ANY_ABILITY else f"Ability: {ab}"
+
+
+# Every copy ability as an item name, for satisfying ANY_ABILITY.
+ALL_ABILITY_ITEMS = [f"Ability: {a}" for a in COPY_ABILITIES]
 
 
 def armor_item_for_stage(level: str, stage: str):

@@ -117,11 +117,20 @@ def build_item_table() -> Dict[str, ItemData]:
                      for m in C.STAGE_ARMOR_REQUIREMENT.values()}
     _GATING_ARMOR |= {"Armor Mode: %s" % m
                       for m in C.CUBE_ARMOR_REQUIREMENT.values()}
+    _GATING_ARMOR |= {"Armor Mode: %s" % m
+                      for m in C.RARE_STICKER_ARMOR_REQUIREMENT.values()}
     # Copy abilities that a cube's puzzle genuinely requires must be progression
     # too, for the same reason: if Sword stays merely useful, fill can drop it
     # inside the very cube that needs Sword, and generation fails.
+    # The ANY_ABILITY sentinel names no particular item, so it contributes
+    # nothing here: a spot that takes any ability is satisfied by whichever one
+    # the seed happens to give you.
     _GATING_ABILITY = {"Ability: %s" % ab
-                       for ab in C.CUBE_ABILITY_REQUIREMENT.values()}
+                       for ab in C.CUBE_ABILITY_REQUIREMENT.values()
+                       if ab != C.ANY_ABILITY}
+    _GATING_ABILITY |= {"Ability: %s" % ab
+                        for ab in C.RARE_STICKER_ABILITY_REQUIREMENT.values()
+                        if ab != C.ANY_ABILITY}
     _USEFUL_PREFIXES = ("Ability: ", "Armor Mode: ")
     for name in _PROGRESSION:
         if name in _GATING_ARMOR or name in _GATING_ABILITY:

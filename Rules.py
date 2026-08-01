@@ -9,6 +9,18 @@ from .Regions import (_has_ex_cube_threshold, _has_boss_cube_gate,
                       _can_reach_area)
 
 
+def _ability_rule(need, player):
+    """Turn a requirement into a state test.
+
+    A named ability asks for that item. The ANY_ABILITY sentinel asks only that
+    you hold at least one copy ability, which is what a puzzle wants when it
+    needs Kirby armed but doesn't care with what.
+    """
+    if need == C.ANY_ABILITY:
+        return lambda state: state.has_any(C.ALL_ABILITY_ITEMS, player)
+    return lambda state: state.has(need, player)
+
+
 def set_rules(world):
     player = world.player
     options = world.options
@@ -115,12 +127,43 @@ def set_rules(world):
             need = C.ability_item_for_cube(lv, st, slot + 1)
             if not need:
                 continue
-            loc_rule(loc_name, lambda state, need=need: state.has(need, player))
-            try:
-                forbid_item(multiworld.get_location(loc_name, player),
-                            need, player)
-            except KeyError:
-                pass
+            loc_rule(loc_name, _ability_rule(need, player))
+            if need != C.ANY_ABILITY:
+                try:
+                    forbid_item(multiworld.get_location(loc_name, player),
+                                need, player)
+                except KeyError:
+                    pass
+
+    # Rare Stickers that need a specific copy ability or armor mode to reach.
+    # These are real walls, not shortcuts: 1-3's sticker sits behind a metal door
+    # that only ESP opens, so without this the seed can place something there
+    # that you have no way of collecting.
+    for loc_name, d in LOCATION_TABLE.items():
+        if getattr(d, "category", None) != "rare":
+            continue
+        lv = getattr(d, "level", None)
+        st = getattr(d, "stage", None)
+        if not lv or not st:
+            continue
+        if options.ability_gating:
+            need = C.ability_item_for_rare_sticker(lv, st)
+            if need:
+                loc_rule(loc_name, _ability_rule(need, player))
+                if need != C.ANY_ABILITY:
+                    try:
+                        forbid_item(multiworld.get_location(loc_name, player),
+                                    need, player)
+                    except KeyError:
+                        pass
+        if options.armor_gating:
+            need = C.armor_item_for_rare_sticker(lv, st)
+            if need:
+                loc_rule(loc_name, lambda state, need=need: state.has(need, player))
+                try:
+                    forbid_item(multiworld.get_location(loc_name, player), need, player)
+                except KeyError:
+                    pass
 
     # An Area's boss is opened by that Area's own Code Cubes, so putting one of
     # those cubes behind that same boss makes the boss partly guard its own key.
