@@ -20,7 +20,7 @@ Works on **Azahar** (emulator) and maybe on a **modded 3DS** running Luma3DS.
 - [What you need](#what-you-need)
 - [1. Install the apworld](#1-install-the-apworld)
 - [2. Install the memory bridge plugin](#2-install-the-memory-bridge-plugin)
-- 3.(Optional) Point the world at your ROM
+- [3.(Optional) Point the world at your ROM]
 - [4. Generate a game](#4-generate-a-game)
 - [5. Build and install the patched game](#5-build-and-install-the-patched-game)
 - [6. Play](#6-play)
