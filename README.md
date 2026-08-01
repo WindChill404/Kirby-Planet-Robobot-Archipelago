@@ -176,8 +176,8 @@ The client confirms when the bridge answers. Load your save file and play.
 | `goal` | `story_star_dream`, `story_boss_count` | Victory condition |
 | `story_boss_count` | 1–6 | Bosses needed when using the boss-count goal |
 | `rare_sticker_checks` | on/off (default **on**) | The 35 in-stage Rare Stickers become locations |
-| `sticker_checks` | on/off (default off) | **Stickersanity.** All 138 normal stickers become locations | This can make logic really weird since technically they are all available right away - use them at your own risk.
-| `open_all_stages` | on/off (default **on**) | Normal stages are open from the start | I highly recommend this stays on. It won't look like the stages are open but just trying walking to them.
+| `sticker_checks` | on/off (default off) | **Stickersanity.** All 138 normal stickers become locations. This can make logic really weird since technically they are all available right away - use them at your own risk. | 
+| `open_all_stages` | on/off (default **on**) | Normal stages are open from the start. I highly recommend this stays on. It won't look like the stages are open but just trying walking to them. |
 | `ability_gating` | on/off | Copy abilities must be received before Kirby can use them |
 | `armor_gating` | on/off | Robobot Armor modes must be received before the armor can use them |
 | `death_link` | on/off | Share deaths with other players |
