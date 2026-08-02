@@ -108,9 +108,18 @@ class KirbyRobobotWorld(World):
 
         # Build the non-cube, non-filler core first so we know how much room the
         # Code Cubes have to work with.
+        # Stickers are filler by design, but they are still specific
+        # collectibles that have to exist once each. Only the generic
+        # consumables are held back, since those are what pads the pool out to
+        # the location count. Skipping every filler item is what stopped a
+        # single sticker from ever being sent.
+        def _is_pool_collectible(nm):
+            return nm.startswith("Rare Sticker:") or nm.startswith("Sticker:")
+
         core_count = 0
         for name, data in ITEM_TABLE.items():
-            if data.classification == ItemClassification.filler:
+            if (data.classification == ItemClassification.filler
+                    and not _is_pool_collectible(name)):
                 continue
             if not self._item_enabled(name):
                 continue

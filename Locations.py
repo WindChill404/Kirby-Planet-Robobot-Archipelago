@@ -188,12 +188,15 @@ def build_location_table() -> Dict[str, LocData]:
             table[_nm] = LocData(_nm, _lv, "stage_clear",
                                  area=_area, stage_no=_st)
 
-    # --- Story boss clears + level clears + EX unlocks ---
+    # --- Story boss clears ---
+    # There used to be an "Unlock <Area> EX Stage" location per Area. Nothing in
+    # game corresponds to it: the EX stage simply opens once you hold enough of
+    # that Area's Code Cubes, so there was no moment to detect and the check
+    # could never be sent. They are gone rather than sitting in the table as
+    # locations that can never be reached.
     for lv in C.LEVELS:
         table[f"Clear {lv} (Boss Defeated)"] = LocData(
             f"Clear {lv} (Boss Defeated)", lv, "boss")
-        table[f"Unlock {lv} EX Stage"] = LocData(
-            f"Unlock {lv} EX Stage", lv, "ex_unlock")
     table["Defeat Star Dream (Story)"] = LocData(
         "Defeat Star Dream (Story)", "Level6", "boss")
 
