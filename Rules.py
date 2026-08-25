@@ -35,15 +35,10 @@ def set_rules(world):
         except KeyError:
             pass
 
-    # Star Dream needs the armor and Level 6 access (the per-level boss gates,
-    # including Level 6's, are set in the loop below).
-    loc_rule("Defeat Star Dream (Story)",
-             lambda state: _can_reach_area(state, player, "Level6"))
+    # Star Dream is the goal rather than a location: finishing the game is
+    # reported straight from the save flags it sets, so there is nothing here to
+    # gate.
 
-    # EX unlock checks need the cube threshold.
-    for lv in C.LEVELS:
-        loc_rule(f"Unlock {lv} EX Stage",
-                 lambda state, lv=lv: _has_ex_cube_threshold(state, player, lv))
 
     # Vanilla Code Cube gate: each level's boss ("firewall") needs enough cubes.
     # The game enforces this itself, so we only need it in logic that keeps
@@ -171,7 +166,7 @@ def set_rules(world):
     # so the Area's cubes are kept off its boss and EX clears entirely.
     for lv in C.LEVELS:
         cube = C.area_cube_name(lv)
-        for suffix in ("Boss Clear", "EX Clear"):
+        for suffix in ("Boss Clear", "EX Stage Clear"):
             nm = f"{C.area_name(lv)} {suffix}"
             try:
                 forbid_item(multiworld.get_location(nm, player), cube, player)

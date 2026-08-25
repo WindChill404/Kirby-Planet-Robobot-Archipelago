@@ -174,31 +174,38 @@ def build_location_table() -> Dict[str, LocData]:
     # Each Area's rows run: normal stages, then the boss, then EX. So the last
     # two of every Area are not "Stage 5" and "Stage 6", they're the boss fight
     # and the EX stage, and naming them by number was misleading.
-    _STAGES_PER_AREA = {1: 6, 2: 6, 3: 7, 4: 7, 5: 7, 6: 9}
-    for _area, _count in _STAGES_PER_AREA.items():
+    # Each Area's rows run: normal stages, then the boss, then EX. Access Ark is
+    # the exception, with two more stages after its EX, so the boss and EX are
+    # NOT simply the last two there. Assuming they were made "Access Ark Boss
+    # Clear" point at a trailing stage while the real boss was published as
+    # "Stage 6 Clear", so the boss check fired for the wrong thing entirely.
+    # Positions come from the game's own layout rather than being counted from
+    # the end.
+    for _area in range(1, 7):
         _lv = f"Level{_area}"
-        _normal = _count - 2                # boss and EX are the last two
+        _layout = _GAME_DATA["level_layout"][_lv]
+        _boss_no = _layout["boss"]
+        _ex_no = _layout["ex"]
+        _count = len(_layout["normal"]) + 2 + len(_layout.get("extra", []))
         for _st in range(1, _count + 1):
-            if _st == _count - 1:
+            if _st == _boss_no:
                 _nm = f"{C.area_name(_lv)} Boss Clear"
-            elif _st == _count:
+            elif _st == _ex_no:
                 _nm = f"{C.area_name(_lv)} EX Stage Clear"
             else:
                 _nm = f"{C.area_name(_lv)} Stage {_st} Clear"
             table[_nm] = LocData(_nm, _lv, "stage_clear",
                                  area=_area, stage_no=_st)
 
-    # --- Story boss clears ---
-    # There used to be an "Unlock <Area> EX Stage" location per Area. Nothing in
-    # game corresponds to it: the EX stage simply opens once you hold enough of
-    # that Area's Code Cubes, so there was no moment to detect and the check
-    # could never be sent. They are gone rather than sitting in the table as
-    # locations that can never be reached.
-    for lv in C.LEVELS:
-        table[f"Clear {lv} (Boss Defeated)"] = LocData(
-            f"Clear {lv} (Boss Defeated)", lv, "boss")
-    table["Defeat Star Dream (Story)"] = LocData(
-        "Defeat Star Dream (Story)", "Level6", "boss")
+    # Two sets of locations used to live here and both are gone.
+    #
+    # "Unlock <Area> EX Stage": nothing in game corresponds to it. The EX stage
+    # simply opens once you hold enough of that Area's Code Cubes, so there was
+    # no moment to detect and the check could never be sent.
+    #
+    # "Clear <Level> (Boss Defeated)": the same event as that Area's Boss Clear
+    # above, listed twice. Only the stage-clear version is ever detected, so the
+    # duplicate sat in every seed as a check that could not be earned.
 
     # Sub-game locations (3D Rumble, Team Kirby Clash, Meta Knightmare, The
     # Arena, The True Arena) are not included. Detecting them needs save offsets

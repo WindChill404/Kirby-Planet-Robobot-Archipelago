@@ -69,7 +69,7 @@ def create_regions(world) -> Dict[str, Region]:
 
 
 def _enabled_categories(options) -> set:
-    cats = {"cube", "boss", "ex_unlock", "event"}
+    cats = {"cube", "boss", "event"}
     if options.sticker_checks:
         cats.add("sticker")
     if options.rare_sticker_checks:

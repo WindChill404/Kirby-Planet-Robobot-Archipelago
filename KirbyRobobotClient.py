@@ -443,6 +443,21 @@ async def watch_save_diff(ctx: KirbyRobobotContext):
         logger.info("   ... and %d more", len(diffs) - 24)
 
 
+def _sticker_kind_enabled(ctx: KirbyRobobotContext, category: str) -> bool:
+    """Is this kind of sticker actually part of the seed?
+
+    Nothing should touch a sticker whose kind the yaml left switched off. With
+    Stickersanity off there are no normal sticker checks to earn, so a normal
+    sticker you pick up is just yours: no check to send, and nothing to clear
+    out of the album.
+    """
+    if category == "rare":
+        return bool(getattr(ctx, "rare_stickers_on", True))
+    if category == "sticker":
+        return bool(getattr(ctx, "normal_stickers_on", False))
+    return False
+
+
 async def read_save_state(ctx: KirbyRobobotContext):
     """Read what we need from the game.
 
@@ -557,6 +572,8 @@ def detect_checks(ctx: KirbyRobobotContext, state) -> List[int]:
     if sarr:
         for _name, d in _LOC_BY_ID.values():
             if d.category != "rare":
+                continue
+            if not _sticker_kind_enabled(ctx, d.category):
                 continue
             si = d.sticker_index
             if si is None or si * 2 + 1 >= len(sarr):
@@ -994,12 +1011,10 @@ async def grant_pending_stickers(ctx: KirbyRobobotContext, state):
     for _n, d in _LOC_BY_ID.values():
         if d.sticker_index is None:
             continue
-        if d.category == "rare" and ctx.rare_stickers_on:
-            idx_to_loc[d.sticker_index] = d.code_offset
-            managed.add(d.sticker_index)
-        elif d.category == "sticker" and ctx.normal_stickers_on:
-            idx_to_loc[d.sticker_index] = d.code_offset
-            managed.add(d.sticker_index)
+        if not _sticker_kind_enabled(ctx, d.category):
+            continue
+        idx_to_loc[d.sticker_index] = d.code_offset
+        managed.add(d.sticker_index)
 
     # Stickers of a switched-off kind are simply put in the album and left
     # there, since nothing needs to be earned for them.
@@ -1288,6 +1303,12 @@ async def _process_collectibles(ctx: KirbyRobobotContext, state):
         sbase = M.SAVE_SLOTS[M.ACTIVE_SLOT] + off.STICKER_ARRAY
         for _n, d in _LOC_BY_ID.values():
             if d.category not in ("rare", "sticker") or d.sticker_index is None:
+                continue
+            # A kind the yaml switched off has no checks, so leave it alone
+            # entirely. This block used to run over every sticker location in
+            # the table regardless, which meant normal stickers were cleared
+            # back out of the album even with Stickersanity off.
+            if not _sticker_kind_enabled(ctx, d.category):
                 continue
             si = d.sticker_index
             if si in ctx.stickers_granted:
