@@ -105,6 +105,9 @@ class KirbyRobobotContext(CommonContext):
         self.received_locations: Set[int] = set()
         self.last_received_index = 0
         self.goal_sent = False
+        self.goal_is_boss_count = False             # slot_data: goal
+        self.story_boss_count = 6                   # slot_data
+        self._bosses_seen = None
         self.save_watch = False                     # /watchsave toggle
         self.armor_log = False                      # /armorlog toggle
         self._armor_last = None
@@ -168,6 +171,11 @@ class KirbyRobobotContext(CommonContext):
         if cmd == "Connected":
             self.slot_data = args.get("slot_data", {})
             logger.info("Connected to multiworld. Goal: %s", self.slot_data.get("goal"))
+            # goal 1 is story_boss_count; anything else finishes at Star Dream.
+            self.goal_is_boss_count = self.slot_data.get("goal") == 1
+            self.story_boss_count = self.slot_data.get("story_boss_count", 6)
+            if self.goal_is_boss_count:
+                logger.info("Goal is %d Story boss(es).", self.story_boss_count)
             if self.slot_data.get("ability_gating"):
                 self.ability_gate_on = True
                 logger.info("Ability gating is on.")
@@ -1335,18 +1343,50 @@ async def _process_collectibles(ctx: KirbyRobobotContext, state):
             await ctx.send_msgs([{"cmd": "LocationChecks", "locations": new}])
 
 
+def _bosses_defeated(state) -> int:
+    """How many Story Mode Area bosses have been beaten.
+
+    Read straight from the stage array, counting the clear byte on each Area's
+    boss row. Access Ark's boss is not the last row of its Area, so the row
+    numbers come from BOSS_STAGE_INDEX rather than being counted from the end.
+    """
+    rows = state.get("stage_rows") or b""
+    if not rows or not M.stages_ready():
+        return 0
+    beaten = 0
+    for area in sorted(M.BOSS_STAGE_INDEX):
+        idx = M.BOSS_STAGE_INDEX[area]
+        pos = idx * M.STAGE_ROW_SIZE + M.STAGE_CLEAR_BYTE
+        if pos < len(rows) and rows[pos] != 0:
+            beaten += 1
+    return beaten
+
+
 def _goal_satisfied(ctx: KirbyRobobotContext, state) -> bool:
     """Has the player finished what their goal asked for?
 
-    Beating Star Dream writes nothing to the stage rows, which is why watching
-    them never worked however many rows were tried. What it does write is a
-    handful of flags in the save file, spotted by diffing the whole save area
-    across the final fight. Any one of them being set means the game is done.
+    Two goals, and they finish at different moments.
 
-    The flags all start at zero and only turn on at the kill, so checking them
-    can't fire early. Which one tripped is logged, so if a future run books the
-    ending differently we'll see which flag carried it.
+    story_boss_count is done as soon as the requested number of Area bosses have
+    been beaten, which is counted from the boss rows of the stage array. This
+    used to be ignored entirely: whatever the yaml asked for, the client only
+    ever watched for the end of the game, so a one boss goal still made you play
+    all the way to Star Dream.
+
+    story_star_dream is done when Star Dream goes down. That writes nothing to
+    the stage rows, which is why watching them never worked however many rows
+    were tried, but it does set several flags in the save file. Those all start
+    at zero and only turn on at the kill, so checking them cannot fire early.
     """
+    if ctx.goal_is_boss_count:
+        want = max(1, int(ctx.story_boss_count or 1))
+        beaten = _bosses_defeated(state)
+        if beaten != getattr(ctx, "_bosses_seen", None):
+            ctx._bosses_seen = beaten
+            logger.info("Story bosses defeated: %d of %d needed.", beaten, want)
+        if beaten >= want:
+            return True
+
     flags = state.get("clear_flags") or b""
     if flags:
         for off in M.GAME_CLEARED_FLAGS:
@@ -1355,7 +1395,6 @@ def _goal_satisfied(ctx: KirbyRobobotContext, state) -> bool:
                 logger.info("Goal reached: save flag +0x%04X is set.", off)
                 return True
     return bool(state.get("game_cleared"))
-
 
 
 def _patch_from_apkr(patch_file: str):

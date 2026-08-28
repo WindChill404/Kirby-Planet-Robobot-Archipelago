@@ -177,11 +177,16 @@ def set_rules(world):
 
 
 def _story_bosses_defeatable(state, player) -> int:
-    """Count how many story-level bosses are reachable+beatable given items."""
+    """How many Area bosses the player could actually beat with what they hold.
+
+    Reaching an Area is not the same as beating its boss: the boss sits behind
+    that Area's own Code Cube firewall. Counting only reachability said you
+    could beat Patched Plains' boss the moment the game started, with no cubes
+    at all, which made a low boss count goal look satisfied before it was.
+    """
     count = 0
     for lv in C.LEVELS:
-        # Level 1 is always reachable; others need their access item.
-        if _can_reach_area(state, player, lv):
+        if _can_reach_area(state, player, lv) and _has_boss_cube_gate(state, player, lv):
             count += 1
     return count
 
