@@ -39,7 +39,7 @@ Works on **Azahar** (emulator) and maybe on a **modded 3DS** running Luma3DS.
 | [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases) 0.5.0+ | The launcher and client |
 | `kirby_robobot.apworld` | This integration |
 | A **decrypted North American** Planet Robobot ROM with no save data | `.cci` or `.3ds` (same format, different extension). Dump it yourself. If you need fresh saves deleting the files in-game works. |
-| [`default.3gx`](https://github.com/LittleCube-hax/albw-ap-plugin/releases/tag/v0.1.3-3DS) | The memory bridge plugin. See [step 2](#2-install-the-memory-bridge-plugin). |
+| [`default.3gx`](https://github.com/LittleCube-hax/albw-ap-plugin/releases/tag/v0.1.3-3DS) | The memory bridge plugin for Azahar. See [step 2](#2-install-the-memory-bridge-plugin). |
 | [Azahar](https://github.com/azahar-emu/azahar) **or** a modded 3DS | Luma3DS 10.2+ on hardware |
 
 ---
@@ -68,8 +68,10 @@ Download it [here](https://github.com/LittleCube-hax/albw-ap-plugin/releases/tag
 
 **On a 3DS (Luma3DS):**
 
+For 3DS, use the 3gx-plugin.3gx from the files [here](https://github.com/WindChill404/3gx-plugin)
+
 ```
-SD:/luma/plugins/<TITLE_ID>/default.3gx
+SD:/luma/plugins/<TITLE_ID>/3gx-plugin.3gx
 ```
 
 Then enable plugins in the Luma configuration menu (hold **Select** at boot →
