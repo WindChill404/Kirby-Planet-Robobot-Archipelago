@@ -2,14 +2,14 @@
 
 An Archipelago randomizer for **Kirby: Planet Robobot** (Nintendo 3DS).
 
-Disclaimer: The code for this integration and this readme were created by AI. I am working on making at least this more human so you might notice some of my annotations. I will also be honest and say that I haven't tested on a physical 3DS, only Azahar on Windows, so take that path at your own risk. Please reach out to me on Discord for any questions or issues.
+Disclaimer: The code for this integration and this readme were created by AI. I am working on making at least this more human so you might notice some of my annotations. Please reach out to me on Discord for any questions or issues.
 
 Code Cubes, stickers, copy abilities, level clears, and Robobot Armor modes become Archipelago
 items and locations. Progress is tracked live in the running game over a small
 memory bridge, so almost nothing is baked into the ROM: the only patched files
 are a handful of the game's own script archives.
 
-Works on **Azahar** (emulator) and maybe on a **modded 3DS** running Luma3DS.
+Works on **Azahar** (emulator)
 
 > No game data is distributed. Everything is built from a ROM you supply.
 
@@ -40,7 +40,7 @@ Works on **Azahar** (emulator) and maybe on a **modded 3DS** running Luma3DS.
 | `kirby_robobot.apworld` | This integration |
 | A **decrypted North American** Planet Robobot ROM with no save data | `.cci` or `.3ds` (same format, different extension). Dump it yourself. If you need fresh saves deleting the files in-game works. |
 | [`default.3gx`](https://github.com/LittleCube-hax/albw-ap-plugin/releases/tag/v0.1.3-3DS) | The memory bridge plugin for Azahar. See [step 2](#2-install-the-memory-bridge-plugin). |
-| [Azahar](https://github.com/azahar-emu/azahar) **or** a modded 3DS | Luma3DS 10.2+ on hardware |
+| [Azahar](https://github.com/azahar-emu/azahar) | |
 
 ---
 
@@ -65,17 +65,6 @@ Kirby, it just moves bytes.
 Download it [here](https://github.com/LittleCube-hax/albw-ap-plugin/releases/tag/v0.1.3-3DS) and rename it to default.3gx.
 
 ### Placing the plugin
-
-**On a 3DS (Luma3DS):**
-
-For 3DS, use the 3gx-plugin.3gx from the files [here](https://github.com/WindChill404/3gx-plugin)
-
-```
-SD:/luma/plugins/<TITLE_ID>/3gx-plugin.3gx
-```
-
-Then enable plugins in the Luma configuration menu (hold **Select** at boot →
-*Enable game patching* / plugin loader, depending on your Luma version).
 
 **On Azahar:**
 
@@ -164,7 +153,6 @@ If the title menu looks unchanged after installing (there should be an 'AP:D' in
 
    ```
    /3ds 127.0.0.1 or whatever it says on screen        # Azahar
-   /3ds 111.222.3.44    # a real 3DS, use your console's IP
    ```
 
 The client confirms when the bridge answers. Load your save file and play.
