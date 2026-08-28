@@ -99,7 +99,6 @@ kirby_robobot_options:
 Setting `mod_path` lets the build step install the mod for you automatically:
 
 - **Azahar** — `<Azahar folder>/load/mods`
-- **3DS** — `<SD card>/luma/titles`
 
 ---
 
