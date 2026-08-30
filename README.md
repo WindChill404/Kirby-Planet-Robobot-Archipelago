@@ -248,4 +248,3 @@ automatically, but you must actually finish the stage.
 - **randomsalience** and **LittleCube** — the memory bridge plugin, originally
   written for the A Link Between Worlds integration and reused here unchanged.
 - The Kirby modding community for the retexture pack used by `kirby_color`, specifically want to shout out **DudeLuke** as the main incorporation for colors is his mod [here](https://gamebanana.com/mods/377858).
-hardware you own. Kirby: Planet Robobot is © HAL Laboratory and Nintendo.
