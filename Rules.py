@@ -7,6 +7,7 @@ from worlds.generic.Rules import forbid_item
 from . import Constants as C
 from .Regions import (_has_ex_cube_threshold, _has_boss_cube_gate,
                       _can_reach_area)
+from . import Logic
 
 
 def _ability_rule(need, player):
@@ -43,122 +44,42 @@ def set_rules(world):
     # Vanilla Code Cube gate: each level's boss ("firewall") needs enough cubes.
     # The game enforces this itself, so we only need it in logic that keeps
     # progression faithful to Robobot and means no boss-unlock hacking.
-    for lv in C.LEVELS:
-        loc_rule(f"Clear {lv} (Boss Defeated)",
-                 lambda state, lv=lv: _has_boss_cube_gate(state, player, lv)
-                 and (_can_reach_area(state, player, lv))
-                 )
+    # Every location's requirements come from Logic, which the tracker in the
+    # client also reads. Keeping one description means the tracker cannot tell
+    # the player a location is open when generation thought otherwise.
+    opts = {
+        "ability_gating": bool(options.ability_gating),
+        "armor_gating": bool(options.armor_gating),
+        "goal": int(options.goal),
+        "story_boss_count": int(options.story_boss_count.value),
+    }
 
-    # Robobot Armor Modes. Only applies when armor gating is on: with it off you
-    # can scan any Capsule and a mode is never a barrier.
-    if options.armor_gating:
-        # Most Code Cubes that need a mode are one of three in their stage, so
-        # this gates the individual cube rather than the whole stage. Gating the
-        # stage would lock away cubes you could genuinely reach without the mode.
-        for loc_name, d in LOCATION_TABLE.items():
-            if getattr(d, "category", None) != "cube":
-                continue
-            lv = getattr(d, "level", None)
-            st = getattr(d, "stage", None)
-            slot = getattr(d, "slot_index", None)
-            if not lv or not st or slot is None:
-                continue
-            need = C.armor_item_for_cube(lv, st, slot + 1)
-            if not need:
-                continue
-            loc_rule(loc_name, lambda state, need=need: state.has(need, player))
-            try:
-                forbid_item(multiworld.get_location(loc_name, player),
-                            need, player)
-            except KeyError:
-                pass
+    def _adapter(state):
+        return (lambda n: state.has(n, player),
+                lambda n: state.count(n, player))
 
-        # A few stages are built entirely around one mode, so everything in them
-        # needs it: the rare sticker, the stage clear, all of it.
-        for loc_name, d in LOCATION_TABLE.items():
-            lv = getattr(d, "level", None)
-            st = getattr(d, "stage", None)
-            if not lv or not st:
-                continue
-            mode = C.STAGE_ARMOR_REQUIREMENT.get((lv, st))
-            if not mode:
-                continue
-            need = f"Armor Mode: {mode}"
-            loc_rule(loc_name, lambda state, need=need: state.has(need, player))
-            try:
-                forbid_item(multiworld.get_location(loc_name, player),
-                            need, player)
-            except KeyError:
-                pass
-
-        # Stage clears are named after the Area and stage number rather than
-        # carrying level/stage fields, so they're matched separately.
-        for (lv, st), mode in C.STAGE_ARMOR_REQUIREMENT.items():
-            try:
-                stage_no = int(st.replace("Stage", ""))
-            except ValueError:
-                continue
-            need = f"Armor Mode: {mode}"
-            nm = f"{C.area_name(lv)} Stage {stage_no} Clear"
-            loc_rule(nm, lambda state, need=need: state.has(need, player))
-            try:
-                forbid_item(multiworld.get_location(nm, player), need, player)
-            except KeyError:
-                pass
-
-    # Kirby copy abilities. Same shape as the armor cube gates, but for Kirby's
-    # own abilities. With ability gating on, the in-stage enemy that would grant
-    # the ability gives nothing until it's been received, so a cube whose puzzle
-    # needs that ability is genuinely locked behind it.
-    if options.ability_gating:
-        for loc_name, d in LOCATION_TABLE.items():
-            if getattr(d, "category", None) != "cube":
-                continue
-            lv = getattr(d, "level", None)
-            st = getattr(d, "stage", None)
-            slot = getattr(d, "slot_index", None)
-            if not lv or not st or slot is None:
-                continue
-            need = C.ability_item_for_cube(lv, st, slot + 1)
-            if not need:
-                continue
-            loc_rule(loc_name, _ability_rule(need, player))
-            if need != C.ANY_ABILITY:
-                try:
-                    forbid_item(multiworld.get_location(loc_name, player),
-                                need, player)
-                except KeyError:
-                    pass
-
-    # Rare Stickers that need a specific copy ability or armor mode to reach.
-    # These are real walls, not shortcuts: 1-3's sticker sits behind a metal door
-    # that only ESP opens, so without this the seed can place something there
-    # that you have no way of collecting.
     for loc_name, d in LOCATION_TABLE.items():
-        if getattr(d, "category", None) != "rare":
+        reqs = Logic.location_requirements(loc_name, d, opts)
+        if not reqs:
             continue
-        lv = getattr(d, "level", None)
-        st = getattr(d, "stage", None)
-        if not lv or not st:
-            continue
-        if options.ability_gating:
-            need = C.ability_item_for_rare_sticker(lv, st)
-            if need:
-                loc_rule(loc_name, _ability_rule(need, player))
-                if need != C.ANY_ABILITY:
-                    try:
-                        forbid_item(multiworld.get_location(loc_name, player),
-                                    need, player)
-                    except KeyError:
-                        pass
-        if options.armor_gating:
-            need = C.armor_item_for_rare_sticker(lv, st)
-            if need:
-                loc_rule(loc_name, lambda state, need=need: state.has(need, player))
-                try:
-                    forbid_item(multiworld.get_location(loc_name, player), need, player)
-                except KeyError:
-                    pass
+
+        def rule(state, reqs=reqs):
+            has, count = _adapter(state)
+            return Logic.satisfied(reqs, has, count)
+
+        loc_rule(loc_name, rule)
+
+        # An item may not be placed at a location that needs that same item.
+        # The any-ability marker names no particular item, so nothing to forbid.
+        for need in reqs:
+            if need == C.ANY_ABILITY or need.startswith(
+                    (Logic.AREA_PREFIX, Logic.BOSS_PREFIX, Logic.EX_PREFIX)):
+                continue
+            try:
+                forbid_item(multiworld.get_location(loc_name, player),
+                            need, player)
+            except KeyError:
+                pass
 
     # An Area's boss is opened by that Area's own Code Cubes, so putting one of
     # those cubes behind that same boss makes the boss partly guard its own key.

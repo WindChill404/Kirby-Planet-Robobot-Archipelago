@@ -239,10 +239,23 @@ AREA_CUBE_COUNTS_REQUIRED = {
 # Only Robobot Armor MODES are listed. Cubes that need one of Kirby's own copy
 # abilities (Poison, ESP, Hammer, Doctor and so on) are covered by ability
 # gating instead, and plain "use the Robobot Armor" needs no particular mode.
+# Sword and Parasol gate cubes here like any other mode. They were briefly
+# removed while the armor could not obtain them, which is the wrong fix: the
+# requirements are real, so the answer is to make the modes work rather than to
+# pretend the cubes are free.
+# Cubes that accept any one of several things rather than one specific item.
+# Each entry lists ("ability", name) or ("armor", name) options; holding any of
+# them is enough. Only the ones whose gate is switched on are asked for.
+CUBE_EITHER_REQUIREMENT = {
+    ("Level1", "Stage2", 3): [("ability", "Sword"), ("ability", "Cutter"),
+                              ("armor", "Sword"), ("armor", "Cutter")],
+}
+
 CUBE_ARMOR_REQUIREMENT = {
-    ("Level1", "Stage2", 3): "Cutter",
-    ("Level1", "Stage4", 3): "Spark",
     ("Level2", "Stage1", 2): "Parasol",
+    ("Level4", "Stage2", 3): "Parasol",
+    ("Level4", "Stage7", 2): "Sword",
+    ("Level1", "Stage4", 3): "Spark",
     ("Level2", "Stage2", 1): "Jet",
     ("Level2", "Stage2", 2): "Jet",
     ("Level2", "Stage2", 3): "Jet",
@@ -255,7 +268,6 @@ CUBE_ARMOR_REQUIREMENT = {
     ("Level3", "Stage4", 2): "Ice",
     ("Level3", "Stage7", 2): "Ice",
     ("Level4", "Stage1", 3): "Stone",
-    ("Level4", "Stage2", 3): "Parasol",
     ("Level4", "Stage4", 1): "Jet",
     ("Level4", "Stage4", 2): "Jet",
     ("Level4", "Stage4", 3): "Jet",
@@ -263,7 +275,6 @@ CUBE_ARMOR_REQUIREMENT = {
     ("Level4", "Stage5", 2): "Cutter",
     ("Level4", "Stage5", 3): "Cutter",
     ("Level4", "Stage7", 1): "Stone",
-    ("Level4", "Stage7", 2): "Sword",
     ("Level5", "Stage1", 1): "Jet",
     ("Level5", "Stage3", 2): "Spark",
     ("Level5", "Stage7", 2): "Stone",
@@ -299,7 +310,6 @@ STAGE_ARMOR_REQUIREMENT = {
 ANY_ABILITY = "*any*"
 
 CUBE_ABILITY_REQUIREMENT = {
-    ("Level1", "Stage2", 3): "Sword",
     ("Level1", "Stage3", 2): ANY_ABILITY,
     ("Level2", "Stage1", 3): "ESP",
     ("Level3", "Stage4", 2): "Ice",

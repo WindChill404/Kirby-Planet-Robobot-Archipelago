@@ -66,6 +66,16 @@ class KirbyRobobotCommandProcessor(ClientCommandProcessor):
         ctx._armor_last = None
         logger.info("Armor copy logging is now %s.", "ON" if ctx.armor_log else "OFF")
 
+    def _cmd_tracker(self):
+        """Show what you can go and get right now, and what each remaining
+        location is still waiting on."""
+        ctx = self.ctx
+        if not ctx.slot_data:
+            logger.info("Connect to the multiworld first.")
+            return
+        for line in tracker_lines(ctx):
+            logger.info(line)
+
     def _cmd_watchsave(self):
         """Arm or disarm save watching.
 
@@ -204,9 +214,50 @@ class KirbyRobobotContext(CommonContext):
     def run_gui(self):
         from kvui import GameManager
 
+        ctx = self
+
         class KRManager(GameManager):
-            logging_pairs = [("Client", "Archipelago")]
+            # A second log pane becomes the tracker tab. Archipelago's client
+            # UI builds one tab per logging pair, so a tracker that lives in the
+            # window costs nothing extra and needs no separate download.
+            logging_pairs = [("Client", "Archipelago"), ("Tracker", "Tracker")]
             base_title = "Archipelago Kirby: Planet Robobot Client"
+
+            def build(self):
+                root = super().build()
+                # Redraw the tracker a moment after connecting, and then
+                # whenever something arrives.
+                from kivy.clock import Clock
+                Clock.schedule_interval(lambda _dt: self.refresh_tracker(), 2.0)
+                return root
+
+            def refresh_tracker(self):
+                """Rewrite the tracker tab if anything has changed.
+
+                Comparing against the last drawn text means the pane is not
+                cleared and rebuilt every couple of seconds, which would fight
+                with scrolling while you are reading it.
+                """
+                if not ctx.slot_data:
+                    return
+                try:
+                    lines = tracker_lines(ctx)
+                except Exception as exc:
+                    lines = ["The tracker could not be drawn: %r" % (exc,)]
+                text = "\n".join(lines)
+                if text == getattr(self, "_tracker_text", None):
+                    return
+                self._tracker_text = text
+                log = logging.getLogger("Tracker")
+                for h in list(log.handlers):
+                    buf = getattr(h, "text_widget", None)
+                    if buf is not None:
+                        try:
+                            buf.text = ""
+                        except Exception:
+                            pass
+                for line in lines:
+                    log.info(line)
 
         self.ui = KRManager(self)
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
@@ -314,6 +365,94 @@ def cube_collected(rows: bytes, stage_index: int, cube_index: int) -> bool:
     if pos >= len(rows):
         return False
     return rows[pos] != 0
+
+
+def tracker_lines(ctx):
+    """The tracker view: what is open, what is not, and why not.
+
+    The judgement comes from Logic, the same module generation uses, so this
+    cannot claim a location is reachable when the seed disagreed. What the
+    client adds is the live picture: which items have actually arrived and which
+    locations have already been sent.
+    """
+    from . import Logic
+    from .Locations import LOCATION_TABLE
+
+    opts = {
+        "ability_gating": bool(ctx.slot_data.get("ability_gating")),
+        "armor_gating": bool(ctx.slot_data.get("armor_gating")),
+        "goal": ctx.slot_data.get("goal", 0),
+        "story_boss_count": ctx.slot_data.get("story_boss_count", 6),
+    }
+
+    items = {}
+    for net in getattr(ctx, "items_received", []):
+        nm = ctx.item_names.lookup_in_game(net.item) if hasattr(ctx, "item_names") else None
+        if nm:
+            items[nm] = items.get(nm, 0) + 1
+
+    # Only judge locations this seed actually has. The table describes every
+    # location the world can produce, but the yaml decides which exist, so
+    # evaluating the table wholesale would list checks that were never in play.
+    in_seed = set(ctx.checked_locations) | set(ctx.missing_locations)
+    table = {}
+    for code in in_seed:
+        nm = _LOC_BY_ID.get(code, (None, None))[0]
+        if nm and nm in LOCATION_TABLE:
+            table[nm] = LOCATION_TABLE[nm]
+    if not table:
+        return ["Waiting for the multiworld to send the location list."]
+
+    checked = set()
+    for code in ctx.checked_locations:
+        nm = _LOC_BY_ID.get(code, (None, None))[0]
+        if nm:
+            checked.add(nm)
+
+    done, open_now, blocked = Logic.evaluate(table, items, opts, checked)
+
+    def count(n):
+        return items.get(n, 0)
+
+    lines = []
+    lines.append("%d checked, %d available now, %d not yet reachable"
+                 % (len(done), len(open_now), len(blocked)))
+    goal_txt = ("beat %s Story boss(es)" % opts["story_boss_count"]
+                if opts["goal"] == 1 else "defeat Star Dream")
+    lines.append("Goal: %s -- %s" % (
+        goal_txt,
+        "reachable" if Logic.goal_met(opts, count) else "not yet reachable"))
+    lines.append("")
+
+    if open_now:
+        lines.append("Available now:")
+        by_area = {}
+        for nm in open_now:
+            d = table[nm]
+            by_area.setdefault(getattr(d, "level", None) or "Other", []).append(nm)
+        for lv in sorted(by_area, key=lambda x: str(x)):
+            label = C.area_name(lv) if lv in C.LEVELS else str(lv)
+            lines.append("  %s (%d)" % (label, len(by_area[lv])))
+            for nm in by_area[lv][:40]:
+                lines.append("     %s" % nm)
+            if len(by_area[lv]) > 40:
+                lines.append("     ... and %d more" % (len(by_area[lv]) - 40))
+        lines.append("")
+
+    if blocked:
+        lines.append("Waiting on something:")
+        shown = 0
+        for nm in blocked:
+            miss = Logic.missing_for(nm, table[nm], items, opts)
+            if not miss:
+                continue
+            lines.append("  %s" % nm)
+            lines.append("     needs: %s" % ", ".join(miss))
+            shown += 1
+            if shown >= 60:
+                lines.append("  ... and %d more" % (len(blocked) - shown))
+                break
+    return lines
 
 
 async def _read_in_stage(ctx: KirbyRobobotContext) -> bool:

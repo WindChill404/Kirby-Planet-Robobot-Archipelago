@@ -1,5 +1,5 @@
 """
-ctr.py — Pure-Python extraction of romfs from a decrypted 3DS ROM.
+ctr.py: pure-Python extraction of romfs from a decrypted 3DS ROM.
 
 This removes the ctrtool dependency entirely: the player only needs their own
 decrypted .cci/.3ds, and everything else is done here.
@@ -53,7 +53,7 @@ def _find_ncch(f: BinaryIO) -> int:
     if head[0x100:0x104] == b"NCCH":
         return 0
 
-    # Case 2: NCSD (.cci/.3ds) — magic at 0x100, partition table at 0x120.
+    # Case 2: NCSD (.cci/.3ds), magic at 0x100, partition table at 0x120.
     if head[0x100:0x104] == b"NCSD":
         for i in range(8):
             off = _u32(head, 0x120 + i * 8) * MEDIA_UNIT
@@ -113,7 +113,7 @@ def read_title_id(rom_path: str) -> str:
 
     This matters more than it looks. The emulator serves LayeredFS mods from a
     folder named after the Title ID, and if that name doesn't match the game
-    you're running, the mod is silently ignored — no error, nothing. We had
+    you're running, the mod is silently ignored, with no error, nothing. We had
     exactly that: a hardcoded (wrong) id meant every ROM patch we made was being
     quietly skipped, which looked for all the world like the patches themselves
     were broken. So we read it from the player's own ROM instead of assuming.
