@@ -16,6 +16,8 @@ The exact RAM addresses live in MemoryMap.py. Until they're pinned on Azahar
 that the memory map is incomplete instead of guessing.
 """
 import asyncio
+import logging
+import re
 import struct
 from typing import Dict, List, Set
 
@@ -29,6 +31,11 @@ from . import MemoryMap as M
 from .Interface import N3DSInterface, ConnectionLost
 from .Locations import LOCATION_TABLE
 from .Items import ITEM_TABLE
+
+# Which build of the client this is. It shows in the window title and in the
+# connect message, so when something misbehaves it is obvious at a glance
+# whether the new file is the one actually running. Change it every release.
+CLIENT_BUILD = "2026-09-29c"
 
 GAME_NAME = C.GAME_NAME
 
@@ -66,14 +73,15 @@ class KirbyRobobotCommandProcessor(ClientCommandProcessor):
         ctx._armor_last = None
         logger.info("Armor copy logging is now %s.", "ON" if ctx.armor_log else "OFF")
 
-    def _cmd_tracker(self):
-        """Show what you can go and get right now, and what each remaining
-        location is still waiting on."""
+    def _cmd_tracker(self, which: str = ""):
+        """Print the tracker. "/tracker available" shows only what you can get
+        right now."""
         ctx = self.ctx
-        if not ctx.slot_data:
+        if not getattr(ctx, "slot_data", None):
             logger.info("Connect to the multiworld first.")
             return
-        for line in tracker_lines(ctx):
+        only = which.strip().lower().startswith("avail")
+        for line in tracker_lines(ctx, available_only=only):
             logger.info(line)
 
     def _cmd_watchsave(self):
@@ -115,6 +123,7 @@ class KirbyRobobotContext(CommonContext):
         self.received_locations: Set[int] = set()
         self.last_received_index = 0
         self.goal_sent = False
+        self.slot_data = {}                         # filled in on Connected
         self.goal_is_boss_count = False             # slot_data: goal
         self.story_boss_count = 6                   # slot_data
         self._bosses_seen = None
@@ -180,7 +189,8 @@ class KirbyRobobotContext(CommonContext):
     def on_package(self, cmd: str, args: dict):
         if cmd == "Connected":
             self.slot_data = args.get("slot_data", {})
-            logger.info("Connected to multiworld. Goal: %s", self.slot_data.get("goal"))
+            logger.info("Connected to multiworld. Goal: %s (client build %s)",
+                        self.slot_data.get("goal"), CLIENT_BUILD)
             # goal 1 is story_boss_count; anything else finishes at Star Dream.
             self.goal_is_boss_count = self.slot_data.get("goal") == 1
             self.story_boss_count = self.slot_data.get("story_boss_count", 6)
@@ -213,51 +223,96 @@ class KirbyRobobotContext(CommonContext):
 
     def run_gui(self):
         from kvui import GameManager
+        # kvui has to be imported before any kivy module, so these come after.
+        from kivy.clock import Clock
+        from kivy.metrics import dp
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.gridlayout import GridLayout
+        from kivy.uix.label import Label
+        from kivy.uix.scrollview import ScrollView
 
         ctx = self
 
+        class TrackerPanel(BoxLayout):
+            """The Tracker tab: a panel whose contents are replaced, not a log.
+
+            It used to be a log pane, which appended a fresh copy of the whole
+            tracker on every change and also spilled into the All tab. This is
+            redrawn in place, and only when something actually changed, so it
+            reads as a single up-to-date page.
+            """
+
+            def __init__(self, **kw):
+                super().__init__(orientation="vertical", **kw)
+                self.available_only = False
+                self._sig = None
+                self._model = None
+                self.toggle = Button(size_hint_y=None, height=dp(36))
+                self.toggle.bind(on_release=self._flip)
+                self._set_toggle_text()
+                self.add_widget(self.toggle)
+                scroll = ScrollView(do_scroll_x=False)
+                self.body = GridLayout(cols=1, size_hint_y=None,
+                                       spacing=dp(10), padding=(dp(10), dp(8)))
+                self.body.bind(minimum_height=self.body.setter("height"))
+                scroll.add_widget(self.body)
+                self.add_widget(scroll)
+
+            def _set_toggle_text(self):
+                self.toggle.text = ("Showing: available only (tap to show everything)"
+                                    if self.available_only else
+                                    "Showing: everything (tap to show available only)")
+
+            def _flip(self, *_):
+                self.available_only = not self.available_only
+                self._set_toggle_text()
+                self._sig = None
+                self.show(self._model, force=True)
+
+            def show(self, model, force=False):
+                self._model = model
+                blocks = tracker_blocks(model, self.available_only)
+                sig = (self.available_only, tuple(blocks))
+                if sig == self._sig and not force:
+                    return
+                self._sig = sig
+                self.body.clear_widgets()
+                # One label per block keeps every text texture small; a single
+                # label holding the whole tracker can outgrow what the graphics
+                # driver will draw and silently come out blank.
+                for b in blocks:
+                    lbl = Label(text=b, markup=True, size_hint_y=None,
+                                halign="left", valign="top")
+                    lbl.bind(width=lambda l, w: setattr(l, "text_size", (w, None)))
+                    lbl.bind(texture_size=lambda l, ts: setattr(l, "height", ts[1]))
+                    self.body.add_widget(lbl)
+
         class KRManager(GameManager):
-            # A second log pane becomes the tracker tab. Archipelago's client
-            # UI builds one tab per logging pair, so a tracker that lives in the
-            # window costs nothing extra and needs no separate download.
-            logging_pairs = [("Client", "Archipelago"), ("Tracker", "Tracker")]
-            base_title = "Archipelago Kirby: Planet Robobot Client"
+            # A single logging pair means Archipelago's UI names its main log
+            # tab "Archipelago" and adds no separate "All" tab. The tracker is
+            # its own panel, so nothing from it ever reaches the log.
+            logging_pairs = [("Client", "Archipelago")]
+            base_title = "Archipelago Kirby: Planet Robobot Client (build %s)" % CLIENT_BUILD
 
             def build(self):
                 root = super().build()
-                # Redraw the tracker a moment after connecting, and then
-                # whenever something arrives.
-                from kivy.clock import Clock
-                Clock.schedule_interval(lambda _dt: self.refresh_tracker(), 2.0)
+                self.tracker_panel = TrackerPanel()
+                self.add_client_tab("Tracker", self.tracker_panel)
+                self.tracker_panel.show(None)
+                Clock.schedule_interval(lambda _dt: self._safe_refresh(), 2.0)
                 return root
 
-            def refresh_tracker(self):
-                """Rewrite the tracker tab if anything has changed.
-
-                Comparing against the last drawn text means the pane is not
-                cleared and rebuilt every couple of seconds, which would fight
-                with scrolling while you are reading it.
-                """
-                if not ctx.slot_data:
-                    return
+            def _safe_refresh(self):
+                # This runs every two seconds from the moment the window opens,
+                # connected or not, so anything it raises would repeat as a
+                # traceback forever. Swallow it and report once instead.
                 try:
-                    lines = tracker_lines(ctx)
+                    self.tracker_panel.show(tracker_model(ctx))
                 except Exception as exc:
-                    lines = ["The tracker could not be drawn: %r" % (exc,)]
-                text = "\n".join(lines)
-                if text == getattr(self, "_tracker_text", None):
-                    return
-                self._tracker_text = text
-                log = logging.getLogger("Tracker")
-                for h in list(log.handlers):
-                    buf = getattr(h, "text_widget", None)
-                    if buf is not None:
-                        try:
-                            buf.text = ""
-                        except Exception:
-                            pass
-                for line in lines:
-                    log.info(line)
+                    if not getattr(self, "_tracker_err_shown", False):
+                        self._tracker_err_shown = True
+                        logger.warning("Tracker refresh failed: %r", exc)
 
         self.ui = KRManager(self)
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
@@ -367,92 +422,218 @@ def cube_collected(rows: bytes, stage_index: int, cube_index: int) -> bool:
     return rows[pos] != 0
 
 
-def tracker_lines(ctx):
-    """The tracker view: what is open, what is not, and why not.
+_ITEM_ID_TO_NAME = None
+
+
+def _item_name(code):
+    """Item name from its id, using this world's own table so it works even
+    before the server has sent its data package."""
+    global _ITEM_ID_TO_NAME
+    if _ITEM_ID_TO_NAME is None:
+        from .Items import ITEM_NAME_TO_ID
+        _ITEM_ID_TO_NAME = {v: k for k, v in ITEM_NAME_TO_ID.items() if v is not None}
+    return _ITEM_ID_TO_NAME.get(code)
+
+
+def _esc(text):
+    """Escape a name for Kivy markup."""
+    return text.replace("&", "&amp;").replace("[", "&bl;").replace("]", "&br;")
+
+
+def _plain(markup):
+    """Markup back to plain text, for the /tracker command."""
+    text = re.sub(r"\[/?(?:b|i|u|color|size)(?:=[^\]]*)?\]", "", markup)
+    return text.replace("&bl;", "[").replace("&br;", "]").replace("&amp;", "&")
+
+
+def tracker_model(ctx):
+    """Everything the tracker shows, worked out once.
 
     The judgement comes from Logic, the same module generation uses, so this
-    cannot claim a location is reachable when the seed disagreed. What the
-    client adds is the live picture: which items have actually arrived and which
-    locations have already been sent.
+    cannot call a location reachable when the seed disagreed. What the client
+    adds is the live picture: which items have arrived and which locations have
+    already been sent. Returns None until connected.
     """
     from . import Logic
-    from .Locations import LOCATION_TABLE
 
+    if not getattr(ctx, "slot_data", None):
+        return None
+    sd = ctx.slot_data
     opts = {
-        "ability_gating": bool(ctx.slot_data.get("ability_gating")),
-        "armor_gating": bool(ctx.slot_data.get("armor_gating")),
-        "goal": ctx.slot_data.get("goal", 0),
-        "story_boss_count": ctx.slot_data.get("story_boss_count", 6),
+        "ability_gating": bool(sd.get("ability_gating")),
+        "armor_gating": bool(sd.get("armor_gating")),
+        "goal": sd.get("goal", 0),
+        "story_boss_count": sd.get("story_boss_count", 6),
     }
 
     items = {}
     for net in getattr(ctx, "items_received", []):
-        nm = ctx.item_names.lookup_in_game(net.item) if hasattr(ctx, "item_names") else None
+        nm = _item_name(net.item)
         if nm:
             items[nm] = items.get(nm, 0) + 1
 
-    # Only judge locations this seed actually has. The table describes every
-    # location the world can produce, but the yaml decides which exist, so
-    # evaluating the table wholesale would list checks that were never in play.
-    in_seed = set(ctx.checked_locations) | set(ctx.missing_locations)
-    table = {}
-    for code in in_seed:
-        nm = _LOC_BY_ID.get(code, (None, None))[0]
-        if nm and nm in LOCATION_TABLE:
-            table[nm] = LOCATION_TABLE[nm]
-    if not table:
-        return ["Waiting for the multiworld to send the location list."]
-
-    checked = set()
-    for code in ctx.checked_locations:
-        nm = _LOC_BY_ID.get(code, (None, None))[0]
-        if nm:
-            checked.add(nm)
-
-    done, open_now, blocked = Logic.evaluate(table, items, opts, checked)
+    def has(n):
+        return items.get(n, 0) > 0
 
     def count(n):
         return items.get(n, 0)
 
-    lines = []
-    lines.append("%d checked, %d available now, %d not yet reachable"
-                 % (len(done), len(open_now), len(blocked)))
+    # Only the locations this seed actually has; the yaml decides which exist.
+    checked_ids = set(getattr(ctx, "checked_locations", ()))
+    in_seed = checked_ids | set(getattr(ctx, "missing_locations", ()))
+    areas = {lv: {"level": lv, "name": C.area_name(lv), "done": 0, "total": 0,
+                  "available": [], "blocked": []} for lv in C.LEVELS}
+    other = {"level": None, "name": "Other", "done": 0, "total": 0,
+             "available": [], "blocked": []}
+    stickers = {"done": 0, "available": 0, "blocked": 0}
+    n_done = n_open = n_blocked = 0
+
+    for code in in_seed:
+        nm = _LOC_BY_ID.get(code, (None, None))[0]
+        if not nm or nm not in LOCATION_TABLE:
+            continue
+        d = LOCATION_TABLE[nm]
+        done = code in checked_ids
+        reqs = Logic.location_requirements(nm, d, opts)
+        ok = done or Logic.satisfied(reqs, has, count)
+        n_done += done
+        n_open += (not done) and ok
+        n_blocked += (not done) and (not ok)
+
+        if d.category == "sticker":
+            # Normal stickers drop anywhere, so they get a count, not a list.
+            if done:
+                stickers["done"] += 1
+            elif ok:
+                stickers["available"] += 1
+            else:
+                stickers["blocked"] += 1
+            continue
+
+        lv = Logic.location_level(d)
+        grp = areas.get(lv, other)
+        grp["total"] += 1
+        if done:
+            grp["done"] += 1
+            continue
+        short = nm
+        prefix = grp["name"] + " "
+        if lv and short.startswith(prefix):
+            short = short[len(prefix):]
+        # Sort by stage, then clears, cubes and stickers within a stage, so the
+        # list reads in the order you would play through the Area.
+        st_no = getattr(d, "stage_no", None) or Logic._stage_no(getattr(d, "stage", None)) or 99
+        kind = {"stage_clear": 0, "cube": 1, "rare": 2}.get(d.category, 3)
+        key = (st_no, kind, short)
+        if ok:
+            grp["available"].append((key, short))
+        else:
+            grp["blocked"].append((key, short, Logic.missing_for(nm, d, items, opts)))
+
+    for grp in list(areas.values()) + [other]:
+        grp["available"] = [x[1] for x in sorted(grp["available"])]
+        grp["blocked"] = [(x[1], x[2]) for x in sorted(grp["blocked"])]
+        lv = grp["level"]
+        grp["locked"] = bool(lv) and not Logic.can_reach_area(lv, count)
+        grp["blockers"] = Logic.area_blockers(lv, count) if grp["locked"] else []
+
     goal_txt = ("beat %s Story boss(es)" % opts["story_boss_count"]
                 if opts["goal"] == 1 else "defeat Star Dream")
-    lines.append("Goal: %s -- %s" % (
-        goal_txt,
-        "reachable" if Logic.goal_met(opts, count) else "not yet reachable"))
-    lines.append("")
+    return {
+        "done": n_done, "open": n_open, "blocked": n_blocked,
+        "goal": goal_txt, "goal_ok": Logic.goal_met(opts, count),
+        "areas": [areas[lv] for lv in C.LEVELS] + ([other] if other["total"] else []),
+        "stickers": stickers if sum(stickers.values()) else None,
+    }
 
-    if open_now:
-        lines.append("Available now:")
-        by_area = {}
-        for nm in open_now:
-            d = table[nm]
-            by_area.setdefault(getattr(d, "level", None) or "Other", []).append(nm)
-        for lv in sorted(by_area, key=lambda x: str(x)):
-            label = C.area_name(lv) if lv in C.LEVELS else str(lv)
-            lines.append("  %s (%d)" % (label, len(by_area[lv])))
-            for nm in by_area[lv][:40]:
-                lines.append("     %s" % nm)
-            if len(by_area[lv]) > 40:
-                lines.append("     ... and %d more" % (len(by_area[lv]) - 40))
-        lines.append("")
 
-    if blocked:
-        lines.append("Waiting on something:")
-        shown = 0
-        for nm in blocked:
-            miss = Logic.missing_for(nm, table[nm], items, opts)
-            if not miss:
-                continue
-            lines.append("  %s" % nm)
-            lines.append("     needs: %s" % ", ".join(miss))
-            shown += 1
-            if shown >= 60:
-                lines.append("  ... and %d more" % (len(blocked) - shown))
-                break
-    return lines
+GREEN, RED, DIM = "7ee787", "ff7b72", "9ea7b3"
+
+
+def tracker_blocks(model, available_only=False):
+    """The tracker as a list of markup blocks, one per section or Area.
+
+    Two clear sections: what you can go and get right now, and what you can't
+    yet and why. A locked Area is one line naming what opens it, rather than a
+    list of everything inside it. With available_only set, the second section is
+    left out entirely.
+    """
+    if model is None:
+        return ["Connect to the multiworld to see the tracker."]
+    blocks = []
+    blocks.append(
+        "[b]%d available now[/b]   %d checked   %d not yet reachable\n"
+        "Goal: %s   [color=%s]%s[/color]"
+        % (model["open"], model["done"], model["blocked"], _esc(model["goal"]),
+           GREEN if model["goal_ok"] else DIM,
+           "reachable" if model["goal_ok"] else "not yet reachable"))
+
+    # ---- what you can get now
+    blocks.append("[b][color=%s]AVAILABLE NOW[/color][/b]" % GREEN)
+    any_open = False
+    for grp in model["areas"]:
+        if not grp["available"]:
+            continue
+        any_open = True
+        lines = ["[b]%s[/b]  (%d)" % (_esc(grp["name"]), len(grp["available"]))]
+        lines += ["    " + _esc(x) for x in grp["available"]]
+        blocks.append("\n".join(lines))
+    st = model["stickers"]
+    if st and st["available"]:
+        any_open = True
+        blocks.append("[b]Stickers[/b]  (%d)\n    can drop in any stage"
+                      % st["available"])
+    if not any_open:
+        blocks.append("[color=%s]Nothing is open right now.[/color]" % DIM)
+
+    if available_only:
+        if model["blocked"]:
+            blocks.append("[color=%s]%d not yet reachable, hidden.[/color]"
+                          % (DIM, model["blocked"]))
+        return blocks
+
+    # ---- what you can't get yet
+    blocks.append("[b][color=%s]NOT YET REACHABLE[/color][/b]" % RED)
+    locked = []
+    prev = None
+    for grp in model["areas"]:
+        if grp["locked"]:
+            left = grp["total"] - grp["done"]
+            if prev is not None and prev["locked"]:
+                # Everything past the first locked Area waits on that one, so
+                # say so instead of repeating the whole chain of firewalls.
+                why = "opens after %s" % prev["name"]
+            else:
+                why = "opens with " + (grp["blockers"][-1] if grp["blockers"]
+                                       else "an earlier Area")
+            locked.append("[b]%s[/b]  locked, %d checks   [color=%s]%s[/color]"
+                          % (_esc(grp["name"]), left, DIM, _esc(why)))
+            prev = grp
+            continue
+        prev = grp
+        if not grp["blocked"]:
+            continue
+        lines = ["[b]%s[/b]  (%d)" % (_esc(grp["name"]), len(grp["blocked"]))]
+        for short, needs in grp["blocked"]:
+            lines.append("    %s  [color=%s]needs %s[/color]"
+                         % (_esc(short), DIM, _esc(";  ".join(needs) or "?")))
+        blocks.append("\n".join(lines))
+    if locked:
+        blocks.append("\n".join(locked))
+    if st and st["blocked"]:
+        blocks.append("[b]Stickers[/b]  (%d) in Areas not yet reached" % st["blocked"])
+    if not model["blocked"]:
+        blocks.append("[color=%s]Nothing left out of reach.[/color]" % DIM)
+    return blocks
+
+
+def tracker_lines(ctx, available_only=False):
+    """Plain-text version of the tracker, for the /tracker command."""
+    out = []
+    for b in tracker_blocks(tracker_model(ctx), available_only):
+        out.extend(_plain(b).split("\n"))
+        out.append("")
+    return out
 
 
 async def _read_in_stage(ctx: KirbyRobobotContext) -> bool:

@@ -27,6 +27,37 @@ BOSS_PREFIX = "boss:"
 EX_PREFIX = "ex:"
 
 
+def location_level(d):
+    """Which Area a location belongs to, or None if it has no fixed place.
+
+    Cubes and Rare Stickers name their level directly. Stage clears carry the
+    Area as a number instead. Normal stickers have no Area at all, since they can
+    drop anywhere, and come back as None.
+    """
+    lv = getattr(d, "level", None)
+    if lv:
+        return lv
+    a = getattr(d, "area", None)
+    return "Level%d" % a if a else None
+
+
+def area_blockers(level, count):
+    """What stands between you and reaching an Area: each earlier Area whose
+    cube firewall you have not yet opened, with how many cubes it needs."""
+    try:
+        want = int(level.replace("Level", ""))
+    except ValueError:
+        return []
+    out = []
+    for a in range(1, want):
+        lv = f"Level{a}"
+        need = C.AREA_CUBE_COUNTS_REQUIRED.get(lv, 0)
+        have = count(C.area_cube_name(lv))
+        if have < need:
+            out.append("%d %s (have %d)" % (need, C.area_cube_name(lv), have))
+    return out
+
+
 def _stage_no(stage: str):
     try:
         return int(stage.replace("Stage", ""))
@@ -41,12 +72,10 @@ def location_requirements(loc_name, d, opts):
     as from the options object during generation.
     """
     reqs = []
-    lv = getattr(d, "level", None)
-    # Stage clears carry their Area as a number rather than a level string, so
-    # recover it. Without this every requirement below was skipped for them, and
-    # boss and EX clears came out with no requirements at all.
-    if lv is None and getattr(d, "area", None):
-        lv = "Level%d" % d.area
+    # Stage clears carry their Area as a number rather than a level string;
+    # location_level recovers it. Without that every requirement below was
+    # skipped for them, and boss and EX clears had no requirements at all.
+    lv = location_level(d)
     st = getattr(d, "stage", None)
     cat = getattr(d, "category", None)
     slot = getattr(d, "slot_index", None)
@@ -130,7 +159,11 @@ def location_requirements(loc_name, d, opts):
             if need:
                 reqs.append(need)
 
-    return reqs
+    # A location can pick up the same item from two rules, such as a cube in a
+    # Jet stage needing Jet for the stage and again for itself. Asking twice is
+    # harmless to logic but reads badly in the tracker, so keep the first.
+    seen = set()
+    return [r for r in reqs if not (r in seen or seen.add(r))]
 
 
 def satisfied(reqs, has, count):
@@ -282,7 +315,7 @@ def missing_for(loc_name, d, items, opts):
         if r.startswith(ANY_OF_PREFIX):
             opt = r[len(ANY_OF_PREFIX):].split("|")
             if not any(has(x) for x in opt):
-                out.append("any of: " + ", ".join(opt))
+                out.append(" or ".join(opt))
         elif r == C.ANY_ABILITY:
             if not any(has(a) for a in C.ALL_ABILITY_ITEMS):
                 out.append("any copy ability")
