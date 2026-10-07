@@ -1,7 +1,7 @@
 # AI Disclosure for Kirby Planet Robobot
 - All the code for this was done by AI under my instructions and testing
 - It has been used to write code, fix code, and create the objects
-- There is no AI generated art or music involved, I made the logo
+- There is no AI generated art or music involved, I made the logo for the client
 - I have used the ideas from the discord as well as my own for the checks/locations, those did not come from it
 
 # For any strong opinions against:
